@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+
+# Allow example environment configuration
+!.env.example
+
+# Database backups
+*.sql
+*.dump
+*.backup
+
+# IDE and system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
