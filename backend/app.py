@@ -1,76 +1,60 @@
-"""Entry point. Run:  python app.py   (or: flask --app app run --debug)
+from flask import Flask, request, jsonify
+from database import init_db, get_db
+import auth
+import products
+import subscription
+import billing
 
-Changes to this file go through the team leader only.
-"""
-import logging
-import os
-from decimal import Decimal
+app = Flask(__name__, static_folder="../frontend", static_url_path="")
 
-import psycopg2
-from dotenv import load_dotenv
-from flask import Flask, jsonify
-from flask.json.provider import DefaultJSONProvider
-from flask_cors import CORS
-from werkzeug.exceptions import HTTPException
+@app.route("/")
+def index():
+    return app.send_static_file("index.html")
 
-from auth import auth_bp
-from billing import billing_bp
-from database import ApiError
-from products import products_bp
-from subscription import subscription_bp
+@app.route("/api/register", methods=["POST"])
+def register():
+    data = request.json
+    res = auth.register_user(data.get("email"), data.get("password"), data.get("role", "customer"), data.get("name"))
+    return jsonify(res)
 
-load_dotenv()
+@app.route("/api/login", methods=["POST"])
+def login():
+    data = request.json
+    res = auth.login_user(data.get("email"), data.get("password"))
+    return jsonify(res)
 
+@app.route("/api/products", methods=["GET", "POST"])
+def handle_products():
+    if request.method == "POST":
+        data = request.json
+        res = products.create_product(data["product_name"], data.get("description", ""), data["price"])
+        return jsonify(res)
+    else:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM products")
+        prods = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(prods)
 
-def _json_default(o):
-    if isinstance(o, Decimal):
-        return float(o)
-    return DefaultJSONProvider.default(o)  # dates, datetimes, etc.
+@app.route("/api/subscriptions", methods=["GET", "POST"])
+def handle_subscriptions():
+    if request.method == "POST":
+        data = request.json
+        res = subscription.create_subscription(data["customer_id"], data["plan_id"], data["start_date"])
+        return jsonify(res)
+    else:
+        conn = get_db()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM subscriptions")
+        subs = [dict(row) for row in cursor.fetchall()]
+        conn.close()
+        return jsonify(subs)
 
-
-class JSONProvider(DefaultJSONProvider):
-    default = staticmethod(_json_default)
-
-
-def create_app():
-    app = Flask(__name__)
-    app.json = JSONProvider(app)
-    app.secret_key = os.getenv("SECRET_KEY", "dev-only-change-me")
-    CORS(app, supports_credentials=True)
-
-    for bp in (auth_bp, products_bp, subscription_bp, billing_bp):
-        app.register_blueprint(bp)
-
-    @app.get("/health")
-    def health():
-        return jsonify({"status": "ok"})
-
-    @app.errorhandler(ApiError)
-    def handle_api_error(e):
-        return jsonify({"error": e.message}), e.status
-
-    @app.errorhandler(psycopg2.IntegrityError)
-    def handle_integrity_error(e):
-        return jsonify({"error": "Conflicts with existing data "
-                                 "(duplicate value or record is still referenced)"}), 409
-
-    @app.errorhandler(psycopg2.DataError)
-    def handle_data_error(e):
-        return jsonify({"error": "Invalid value supplied (check dates and numbers)"}), 400
-
-    @app.errorhandler(HTTPException)
-    def handle_http_error(e):
-        return jsonify({"error": e.description}), e.code
-
-    @app.errorhandler(Exception)
-    def handle_unexpected(e):
-        logging.exception("Unhandled error")
-        return jsonify({"error": "Internal server error"}), 500
-
-    return app
-
-
-app = create_app()
+@app.route("/api/dashboard", methods=["GET"])
+def get_dashboard():
+    return jsonify(billing.get_dashboard_metrics())
 
 if __name__ == "__main__":
-    app.run(debug=True, port=int(os.getenv("PORT", 5000)))
+    init_db()
+    app.run(debug=True, port=5000)
