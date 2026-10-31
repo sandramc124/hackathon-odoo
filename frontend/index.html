@@ -1,0 +1,23 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login - SubscriptionHub</title><link rel="stylesheet" href="/css/style.css"></head>
+<body data-public>
+<!-- Member 1 -->
+<div class="auth">
+  <div class="card"><h2>Log in</h2>
+    <form id="lf"><input name="email" type="email" placeholder="Email" required><input name="password" type="password" placeholder="Password" required><button>Log in</button></form></div>
+  <div class="card"><h2>Create account</h2>
+    <p style="color:var(--mut);margin-top:0">The very first account created becomes the admin.</p>
+    <form id="rf"><input name="name" placeholder="Full name" required><input name="email" type="email" placeholder="Email" required>
+      <input name="password" type="password" placeholder="Password (min 6)" required minlength="6"><input name="phone" placeholder="Phone"><button>Register</button></form></div>
+</div>
+<script src="/js/app.js"></script>
+<script>
+const home = u => location.href = u.role === 'customer' ? '/subscriptions.html' : '/dashboard.html';
+const go = (id, url, after) => $('#' + id).onsubmit = async e => {
+  e.preventDefault();
+  const d = Object.fromEntries(new FormData(e.target));
+  try { await after(await api(url, 'POST', d), d); } catch (x) { toast(x.message, 1); }
+};
+go('lf', '/auth/login', home);
+go('rf', '/auth/register', async (u, d) => { toast('Registered as ' + u.role); home(await api('/auth/login', 'POST', {email: d.email, password: d.password})); });
+</script></body></html>

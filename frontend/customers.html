@@ -1,0 +1,14 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Customers - SubscriptionHub</title><link rel="stylesheet" href="/css/style.css"></head><body><nav id="nav"></nav><main id="main"></main><script src="/js/app.js"></script>
+<!-- Member 1 -->
+<script>
+(async () => {
+  const me = await init(true);
+  section($('#main'), {
+    title: 'Customers', list: '/customers', create: '/customers',
+    fields: [{name:'name',label:'Name',req:1},{name:'email',label:'Email',type:'email',req:1},{name:'phone',label:'Phone'},{name:'address',label:'Address'}],
+    edit: {url: r => '/customers/' + r.customer_id, fields: ['name','email','phone','address']},
+    actions: me.role === 'admin' ? [{label:'Delete',cls:'red',run: async r => { if (confirm('Delete ' + r.name + '?')) await api('/customers/' + r.customer_id, 'DELETE'); }}] : [],
+    cols: [C('ID','customer_id'),C('Name','name'),C('Email','email'),C('Phone','phone'),C('Address','address')]
+  });
+})();
+</script></body></html>

@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Subscriptions - SubscriptionHub</title><link rel="stylesheet" href="/css/style.css"></head><body><nav id="nav"></nav><main id="main"></main><script src="/js/app.js"></script>
+<!-- Member 3 -->
+<script>
+(async () => {
+  const me = await init(), staff = me.role !== 'customer', m = $('#main');
+  const plans = await api('/plans'), custs = staff ? await api('/customers') : [];
+  const fields = [
+    ...(staff ? [{name:'customer_id',label:'Customer',type:'number',req:1,options:custs.map(c=>[c.customer_id,c.name])}] : []),
+    {name:'plan_id',label:'Plan',type:'number',req:1,options:plans.map(p=>[p.plan_id, `${p.product_name} · ${p.billing_cycle} · ${money(p.price)}`])},
+    {name:'quantity',label:'Quantity',type:'number',value:1},{name:'discount_code',label:'Discount code'}];
+  m.innerHTML = `<div class="card"><h2>New subscription</h2><form id="nf" class="row">${fields.map(field).join('')}
+    <button value="q">${staff ? 'Create quotation' : 'Request quotation'}</button>
+    ${staff ? '<button value="s">Create &amp; activate</button><button type="button" id="ex" class="ghost">Run expiry check</button>' : ''}</form></div>`;
+
+  const post = u => async r => { await api(u(r), 'POST'); toast('Done'); };
+  const id = r => r.subscription_id;
+  const S = section(m, {title:'Subscriptions', list:'/subscriptions',
+    cols:[C('ID','subscription_id'),...(staff?[C('Customer','customer_name')]:[]),C('Product','product_name'),C('Cycle','billing_cycle'),
+          ['Status',r=>badge(r.status)],['Start',r=>fd(r.start_date)],['End',r=>fd(r.end_date)],['Next billing',r=>fd(r.next_billing_date)]],
+    actions:[
+      {label:'Confirm', show:r=>r.status==='quotation', run:post(r=>`/quotations/${id(r)}/confirm`)},
+      ...(staff ? [
+        {label:'Pause',  show:r=>r.status==='active', run:post(r=>`/subscriptions/${id(r)}/pause`)},
+        {label:'Resume', show:r=>r.status==='paused', run:post(r=>`/subscriptions/${id(r)}/resume`)},
+        {label:'Renew',  show:r=>['active','expired'].includes(r.status), run:post(r=>`/subscriptions/${id(r)}/renew`)},
+        {label:'Bill now',cls:'ghost',show:r=>r.status==='active', run:post(r=>`/invoices/generate/${id(r)}`)},
+        {label:'Cancel', cls:'red', show:r=>['quotation','active','paused'].includes(r.status),
+         run: async r => { if (confirm('Cancel subscription #' + id(r) + '?')) await post(r=>`/subscriptions/${id(r)}/cancel`)(r); }}] : [])]});
+
+  $('#nf').onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const d = collect(e.target, fields);
+      if (e.submitter.value === 's') { await api('/subscriptions', 'POST', d); toast('Activated - first invoice created'); }
+      else { await api('/quotations', 'POST', d); toast('Quotation created'); }
+      await S.refresh();
+    } catch (x) { toast(x.message, 1); }
+  };
+  if (staff) $('#ex').onclick = async () => { try { const r = await api('/subscriptions/expire-check', 'POST'); toast(r.expired.length + ' subscription(s) expired'); S.refresh(); } catch (x) { toast(x.message, 1); } };
+})();
+</script></body></html>

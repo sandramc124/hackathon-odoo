@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Products - SubscriptionHub</title><link rel="stylesheet" href="/css/style.css"></head><body><nav id="nav"></nav><main id="main"></main><script src="/js/app.js"></script>
+<!-- Member 2: products, variants, plans, discounts -->
+<script>
+(async () => {
+  await init(true);
+  const m = $('#main'), reload = () => location.reload();
+  const prods = (await api('/products')).map(p => [p.product_id, p.product_name]);
+  const del = (url, label) => ({label, cls:'red', run: async r => { if (confirm(label + '?')) await api(url(r), 'DELETE'); }});
+
+  section(m, {title:'Products', list:'/products?all=1', create:'/products', after: reload,
+    fields:[{name:'product_name',label:'Product name',req:1},{name:'description',label:'Description'},{name:'price',label:'Base price',type:'number',req:1}],
+    edit:{url:r=>'/products/'+r.product_id, fields:['product_name','description','price']},
+    actions:[del(r=>'/products/'+r.product_id,'Deactivate')],
+    cols:[C('ID','product_id'),C('Name','product_name'),C('Description','description'),['Price',r=>money(r.price)],['Active',r=>r.is_active?'Yes':'No']]});
+
+  section(m, {title:'Variants', create: d => `/products/${d.product_id}/variants`,
+    load: async () => (await Promise.all((await api('/products?all=1')).map(p => api(`/products/${p.product_id}/variants`).then(v => v.map(x => ({...x, product_name:p.product_name})))))).flat(),
+    fields:[{name:'product_id',label:'Product',type:'number',req:1,options:prods},{name:'attribute',label:'Attribute (e.g. Users)',req:1},{name:'value',label:'Value (e.g. 25 users)',req:1},{name:'extra_price',label:'Extra price',type:'number'}],
+    edit:{url:r=>'/variants/'+r.variant_id, fields:['attribute','value','extra_price']},
+    actions:[del(r=>'/variants/'+r.variant_id,'Delete')],
+    cols:[C('Product','product_name'),C('Attribute','attribute'),C('Value','value'),['Extra price',r=>money(r.extra_price)]]});
+
+  section(m, {title:'Subscription plans', list:'/plans', create:'/plans',
+    fields:[{name:'product_id',label:'Product',type:'number',req:1,options:prods},
+            {name:'billing_cycle',label:'Billing cycle',req:1,options:['weekly','monthly','quarterly','yearly'].map(x=>[x,x])},
+            {name:'duration',label:'Duration (cycles)',type:'number',value:1},{name:'price',label:'Price per cycle',type:'number',req:1}],
+    edit:{url:r=>'/plans/'+r.plan_id, fields:['billing_cycle','duration','price']},
+    actions:[del(r=>'/plans/'+r.plan_id,'Deactivate')],
+    cols:[C('ID','plan_id'),C('Product','product_name'),C('Cycle','billing_cycle'),C('Duration','duration'),['Price',r=>money(r.price)]]});
+
+  section(m, {title:'Discounts', list:'/discounts', create:'/discounts',
+    fields:[{name:'code',label:'Code',req:1},{name:'type',label:'Type',req:1,options:[['percent','percent'],['fixed','fixed']]},
+            {name:'value',label:'Value',type:'number',req:1},{name:'valid_from',label:'Valid from',type:'date'},{name:'valid_until',label:'Valid until',type:'date'}],
+    edit:{url:r=>'/discounts/'+r.discount_id, fields:['value','valid_until']},
+    actions:[del(r=>'/discounts/'+r.discount_id,'Delete')],
+    cols:[C('Code','code'),C('Type','type'),C('Value','value'),['From',r=>fd(r.valid_from)],['Until',r=>fd(r.valid_until)]]});
+})();
+</script></body></html>

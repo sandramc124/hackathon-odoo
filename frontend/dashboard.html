@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dashboard - SubscriptionHub</title><link rel="stylesheet" href="/css/style.css"></head><body><nav id="nav"></nav><main id="main"></main><script src="/js/app.js"></script>
+<!-- Member 4: dashboard & reports -->
+<script>
+(async () => {
+  await init(true);
+  const m = $('#main');
+  try {
+    const s = await api('/dashboard/summary');
+    const stats = [['Total revenue',money(s.total_revenue)],['Outstanding',money(s.outstanding_amount)],['Active subscriptions',s.active_subscriptions],['Customers',s.total_customers],['Overdue invoices',s.overdue_invoices]];
+    m.innerHTML = '<div class="grid">' + stats.map(([l, v]) => `<div class="card stat"><b>${v}</b><span>${l}</span></div>`).join('') + '</div>';
+    const rev = await api('/dashboard/revenue'), max = Math.max(1, ...rev.map(r => r.revenue));
+    m.insertAdjacentHTML('beforeend', '<div class="card"><h2>Monthly revenue</h2>' + (rev.length
+      ? rev.map(r => `<div class="bar"><span>${esc(r.month)}</span><i style="width:${Math.round(r.revenue / max * 60)}%"></i>${money(r.revenue)}</div>`).join('')
+      : '<p style="color:var(--mut)">No payments recorded yet.</p>') + '</div>');
+  } catch (x) { toast(x.message, 1); }
+  section(m, {title:'Revenue by product', load:() => api('/reports/revenue-by-product'), cols:[C('Product','product_name'),['Revenue',r=>money(r.revenue)]]});
+  section(m, {title:'Outstanding invoices', load:() => api('/reports/outstanding'),
+    cols:[C('Invoice','invoice_id'),C('Customer','customer_name'),['Due',r=>fd(r.due_date)],['Status',r=>badge(r.status)],['Total',r=>money(r.total)],['Balance',r=>money(r.balance)]]});
+})();
+</script></body></html>

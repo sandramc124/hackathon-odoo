@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Billing - SubscriptionHub</title><link rel="stylesheet" href="/css/style.css"></head><body><nav id="nav"></nav><main id="main"></main><script src="/js/app.js"></script>
+<!-- Member 4: invoices + payments -->
+<script>
+(async () => {
+  const me = await init(), staff = me.role !== 'customer', m = $('#main');
+  m.innerHTML = '<dialog id="dlg"></dialog><div class="card"><div class="row"><select id="sf"><option value="">All statuses</option><option>unpaid</option><option>overdue</option><option>paid</option></select>' +
+    (staff ? '<button id="gd">Generate due invoices</button><button id="uo" class="ghost">Mark overdue</button>' : '') + '</div></div>';
+
+  async function view(id) {
+    const i = await api('/invoices/' + id);
+    $('#dlg').innerHTML = `<h2>Invoice #${i.invoice_id} ${badge(i.status)}</h2><p>${esc(i.customer_name)} · issued ${fd(i.invoice_date)} · due ${fd(i.due_date)}</p>` +
+      table(i.lines, [C('Description','description'),C('Qty','quantity'),['Unit',r=>money(r.unit_price)],['Amount',r=>money(r.amount)]]) +
+      `<p>Subtotal ${money(i.subtotal)} · Tax ${money(i.tax)} · <b>Total ${money(i.total)}</b><br>Paid ${money(i.amount_paid)} · Balance <b>${money(i.balance)}</b></p>` +
+      (i.payments.length ? '<h2>Payments</h2>' + table(i.payments, [['Date',r=>fd(r.payment_date)],C('Method','payment_method'),['Amount',r=>money(r.amount)]]) : '') +
+      '<form method="dialog"><button>Close</button></form>';
+    $('#dlg').showModal();
+  }
+
+  const S = section(m, {title: staff ? 'Invoices & payments' : 'My invoices',
+    load: () => api('/invoices' + ($('#sf').value ? '?status=' + $('#sf').value : '')),
+    cols:[C('#','invoice_id'),C('Customer','customer_name'),['Date',r=>fd(r.invoice_date)],['Due',r=>fd(r.due_date)],['Total',r=>money(r.total)],['Status',r=>badge(r.status)]],
+    actions:[
+      {label:'View', cls:'ghost', run: r => view(r.invoice_id)},
+      ...(staff ? [{label:'Record payment', show:r=>r.status!=='paid', run: async r => {
+        const i = await api('/invoices/' + r.invoice_id);
+        const a = prompt('Amount (balance ' + i.balance + ')', i.balance); if (a === null) return;
+        const method = prompt('Method: cash, card, upi, bank_transfer', 'upi'); if (method === null) return;
+        await api('/payments', 'POST', {invoice_id: r.invoice_id, amount: Number(a), payment_method: method});
+        toast('Payment recorded');
+      }}] : [])]});
+
+  $('#sf').onchange = () => S.refresh();
+  if (staff) {
+    $('#gd').onclick = async () => { try { const r = await api('/invoices/generate-due', 'POST'); toast(r.invoices_created.length + ' invoice(s) created'); S.refresh(); } catch (x) { toast(x.message, 1); } };
+    $('#uo').onclick = async () => { try { const r = await api('/invoices/update-overdue', 'POST'); toast(r.marked_overdue.length + ' marked overdue'); S.refresh(); } catch (x) { toast(x.message, 1); } };
+  }
+})();
+</script></body></html>
